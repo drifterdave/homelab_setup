@@ -1,0 +1,27 @@
+version: v1alpha1
+metadata:
+  name: ${node_name}
+machine:
+  type: ${node_type == "control" ? "controlplane" : "worker"}
+  network:
+    interfaces:
+      - interface: eth0
+        addresses:
+          - ${private_ipv4}
+        routes:
+          - network: 0.0.0.0/0
+            gateway: ${gateway}
+    nameservers:
+      - 8.8.8.8
+      - 1.1.1.1
+  certSANs:
+    - ${node_name}
+    - ${node_name}.${domain_internal}
+    - ${node_name}.${domain_external}
+  kubelet:
+    extraArgs:
+      node-labels: "node-type=${node_type == "control" ? "controlplane" : "worker"}"
+install:
+  extensions:
+    - image: siderolabs/tailscale:v${talos_version}
+    - image: siderolabs/qemu-guest-agent:v${talos_version}

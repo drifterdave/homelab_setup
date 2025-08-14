@@ -2,10 +2,9 @@
 # This file is safe to commit to version control
 
 # Default values
-default_email        = "max@excloo.com"
-default_organization = "excloo"
+default_email        = "ryan@0x3b.io"
+default_organization = "0x3b.io"
 
 # Domain configuration
-domain_acme     = "excloo-acme.duckdns.org"
-domain_external = "excloo.net"
-domain_internal = "excloo.dev"
+domain_external = "0x3b.io.home"
+domain_internal = "0x3b.io.home"

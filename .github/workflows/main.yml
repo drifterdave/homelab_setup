@@ -29,7 +29,7 @@ permissions:
 env:
   MISE_YES: true
   OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-  TF_TOKEN_app_terraform_io: ${{ secrets.TF_TOKEN_app_terraform_io }}
+  
 
 jobs:
   main:

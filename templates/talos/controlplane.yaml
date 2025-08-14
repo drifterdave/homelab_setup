@@ -1,0 +1,184 @@
+version: v1alpha1
+metadata:
+  name: ${node_name}
+  labels:
+    node-type: controlplane
+machine:
+  type: controlplane
+  certSANs:
+    - ${node_name}
+    - ${node_name}.${domain_internal}
+    - ${node_name}.${domain_external}
+    - k8s.${domain_internal}
+    - k8s.${domain_external}
+    - kubernetes.default.svc.${dns_domain}
+  kubelet:
+    extraArgs:
+      node-labels: "node-type=controlplane"
+  network:
+    interfaces:
+      - interface: eth0
+        addresses:
+          - ${private_ipv4}
+        routes:
+          - network: 0.0.0.0/0
+            gateway: ${gateway}
+    nameservers:
+      - 8.8.8.8
+      - 1.1.1.1
+cluster:
+  controlPlane:
+    endpoint: https://k8s.${domain_internal}:6443
+  network:
+    cni:
+      name: flannel
+    podSubnets:
+      - ${pod_cidr}
+    serviceSubnets:
+      - ${service_cidr}
+    dnsDomain: ${dns_domain}
+  apiServer:
+    certSANs:
+      - ${node_name}
+      - ${node_name}.${domain_internal}
+      - ${node_name}.${domain_external}
+      - k8s.${domain_internal}
+      - k8s.${domain_external}
+      - kubernetes.default.svc.${dns_domain}
+  controllerManager:
+    extraArgs:
+      node-cidr-mask-size: "24"
+  scheduler: {}
+  etcd: {}
+  inlineManifests:
+    - name: coredns
+      contents: |
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: kube-system
+        ---
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: coredns
+          namespace: kube-system
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: system:coredns
+        rules:
+        - apiGroups: [""]
+          resources: ["endpoints", "services", "pods", "namespaces"]
+          verbs: ["list", "watch"]
+        - apiGroups: [""]
+          resources: ["nodes"]
+          verbs: ["get", "list", "watch"]
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: system:coredns
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: system:coredns
+        subjects:
+        - kind: ServiceAccount
+          name: coredns
+          namespace: kube-system
+        ---
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: coredns
+          namespace: kube-system
+        data:
+          Corefile: |
+            .:53 {
+                errors
+                health
+                ready
+                kubernetes ${dns_domain} in-addr.arpa ip6.arpa {
+                   pods insecure
+                   fallthrough in-addr.arpa ip6.arpa
+                   ttl 30
+                }
+                prometheus :9153
+                forward . /etc/resolv.conf
+                cache 30
+                loop
+                reload
+                loadbalance
+            }
+        ---
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: coredns
+          namespace: kube-system
+          labels:
+            k8s-app: kube-dns
+        spec:
+          replicas: 2
+          selector:
+            matchLabels:
+              k8s-app: kube-dns
+          template:
+            metadata:
+              labels:
+                k8s-app: kube-dns
+            spec:
+              serviceAccountName: coredns
+              containers:
+              - name: coredns
+                image: coredns/coredns:1.11.1
+                args: ["-conf", "/etc/coredns/Corefile"]
+                ports:
+                - containerPort: 53
+                  name: dns
+                  protocol: UDP
+                - containerPort: 53
+                  name: dns-tcp
+                  protocol: TCP
+                - containerPort: 9153
+                  name: metrics
+                  protocol: TCP
+                volumeMounts:
+                - name: config-volume
+                  mountPath: /etc/coredns
+                  readOnly: true
+              volumes:
+              - name: config-volume
+                configMap:
+                  name: coredns
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: kube-dns
+          namespace: kube-system
+          labels:
+            k8s-app: kube-dns
+        spec:
+          selector:
+            k8s-app: kube-dns
+          ports:
+          - name: dns
+            port: 53
+            protocol: UDP
+            targetPort: 53
+          - name: dns-tcp
+            port: 53
+            protocol: TCP
+            targetPort: 53
+          - name: metrics
+            port: 9153
+            protocol: TCP
+            targetPort: 9153
+          clusterIP: 10.96.0.10
+install:
+  extensions:
+    - image: siderolabs/tailscale:${talos_version}
+    - image: siderolabs/qemu-guest-agent:${talos_version}

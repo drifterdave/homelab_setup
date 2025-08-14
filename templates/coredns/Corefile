@@ -1,0 +1,60 @@
+# CoreDNS configuration for Kubernetes service discovery and custom domains
+
+# Kubernetes service discovery
+${dns_domain}:53 {
+    errors
+    health
+    ready
+    kubernetes ${dns_domain} in-addr.arpa ip6.arpa {
+        pods insecure
+        fallthrough in-addr.arpa ip6.arpa
+        ttl 30
+    }
+    prometheus :9153
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    reload
+    loadbalance
+}
+
+# Internal domain
+${domain_internal}:53 {
+    errors
+    health
+    ready
+    file /etc/coredns/custom.db
+    prometheus :9153
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    reload
+    loadbalance
+}
+
+# External domain
+${domain_external}:53 {
+    errors
+    health
+    ready
+    file /etc/coredns/custom.db
+    prometheus :9153
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    reload
+    loadbalance
+}
+
+# Default forward to upstream DNS
+.:53 {
+    errors
+    health
+    ready
+    prometheus :9153
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    reload
+    loadbalance
+}

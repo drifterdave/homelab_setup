@@ -1,10 +1,13 @@
 [tools]
 opentofu = "latest"
+kubectl = "latest"
+talosctl = "latest"
 
 [env]
 TF_CLI_ARGS_init = "-upgrade"
 TF_CLI_ARGS_plan = "-compact-warnings"
 TF_CLI_ARGS_apply = "-compact-warnings"
+SSH_AUTH_SOCK="/Users/ryansnyder/.1password/agent.sock"
 
 # Setup & Initialize
 [tasks.setup]
@@ -28,46 +31,74 @@ if [[ ! -f .mise.local.toml ]]; then
 # Create at: https://my.1password.com/integrations/active
 OP_SERVICE_ACCOUNT_TOKEN = "REPLACE_ME"
 
-# HCP Terraform Token  
-# Create at: https://app.terraform.io/app/settings/tokens
-TF_TOKEN_app_terraform_io = "REPLACE_ME"
 EOF
     echo "✅ Created .mise.local.toml - please add your tokens"
 fi
 
 # Create providers entry in 1Password if it doesn't exist
 echo "🔑 Checking providers entry..."
-if ! op item get "providers" --vault "Infrastructure" 2>/dev/null; then
+if ! op item get "providers" --vault "Homelab" 2>/dev/null; then
     echo "📝 Creating providers entry with all fields..."
     op item create \
         --category="Login" \
         --title="providers" \
-        --vault="Infrastructure" || echo "❌ Failed to create providers entry"
+        --vault="Homelab" || echo "❌ Failed to create providers entry"
     
     # Add all provider fields
     echo "📋 Adding provider fields..."
-    op item edit --vault="Infrastructure" "providers" \
-        'b2.application_key[concealed]=REPLACE_ME' \
-        'b2.application_key_id[text]=REPLACE_ME' \
-        'cloudflare.account_id[text]=REPLACE_ME' \
-        'cloudflare.api_key[concealed]=REPLACE_ME' \
-        'cloudflare.email[text]=REPLACE_ME' \
-        'duckdns.token[concealed]=REPLACE_ME' \
+    op item edit --vault="Homelab" "providers" \
+
+        
+        
         'github.token[concealed]=REPLACE_ME' \
-        'resend.api_key[concealed]=REPLACE_ME' \
-        'tailscale.oauth_client_id[text]=REPLACE_ME' \
-        'tailscale.oauth_client_secret[concealed]=REPLACE_ME' \
-        'tailscale.tailnet[text]=REPLACE_ME' 2>/dev/null || echo "⚠️  Could not add all provider fields"
+
+        'tailscale.api_key[concealed]=REPLACE_ME' \
+        'tailscale.tailnet[text]=REPLACE_ME' \
+        'proxmox.endpoint[text]=https://pve.example.com:8006/api2/json' \
+        'proxmox.username[text]=root@pam' \
+        'proxmox.password[concealed]=REPLACE_ME' \
+        'proxmox.api_token[concealed]=REPLACE_ME' \
+        'proxmox.insecure[text]=false' \
+        'proxmox.node_name[text]=pve' \
+        'proxmox.vm_id_start[text]=100' \
+        'kubernetes.cluster_name[text]=homelab-cluster' \
+        'kubernetes.pod_cidr[text]=10.244.0.0/16' \
+        'kubernetes.service_cidr[text]=10.96.0.0/12' \
+        'kubernetes.dns_domain[text]=cluster.local' \
+        'kubernetes.control_plane_endpoint[text]=k8s.internal.example' \
+            'kubernetes.cluster_name[text]=homelab-cluster' \
+    'kubernetes.pod_cidr[text]=10.244.0.0/16' \
+    'kubernetes.service_cidr[text]=10.96.0.0/12' \
+    'kubernetes.dns_domain[text]=cluster.local' \
+    'kubernetes.control_plane_endpoint[text]=k8s.internal.example' \
+    'kubernetes.talos_version[text]=v1.7.0' \
+    'kubernetes.config_path[text]=./config' 2>/dev/null || echo "⚠️  Could not add all provider fields"
 else
     echo "✅ Providers entry exists"
 fi
+
+# Setup DNS entries in Homelab vault only
+echo "📋 Setting up DNS entries in Homelab vault..."
+op item create \
+    --category="Login" \
+    --title="dns-excloo.com-mail" \
+    --vault="Homelab" 2>/dev/null || echo "⚠️  DNS entry may already exist"
+
+op item edit --vault="Homelab" "dns-excloo.com-mail" \
+    'content[text]=103.168.172.65' \
+    'type[text]=A' \
+    'priority[text]=' \
+    'ttl[text]=300' \
+    'proxied[text]=false' \
+    'wildcard[text]=false' \
+    'comment[text]=Mail server A record' 2>/dev/null || echo "⚠️  Could not add DNS fields"
 
 echo "✅ Setup complete!"
 """
 
 [tasks.init]
 description = "Initialize OpenTofu"
-run = "tofu init"
+run = "tofu init -upgrade"
 
 # Development
 [tasks.check]
@@ -107,6 +138,10 @@ find . -name '.terraform' -type d -exec rm -rf {} + 2>/dev/null || true
 find . -name '*.tfplan' -delete 2>/dev/null || true
 echo "✅ Cleaned up generated files"
 """
+
+[tasks.proxmox-setup]
+description = "Setup Proxmox configuration"
+run = "bash scripts/setup-proxmox.sh"
 
 [tasks.refresh]
 description = "Check for configuration drift"
