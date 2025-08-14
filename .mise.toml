@@ -129,6 +129,17 @@ else
 fi
 """
 
+[tasks.destroy]
+description = "Destroy all changes"
+run = """
+# Destroy infrastructure
+if [[ -n "$CI" ]] || [[ "$MISE_YES" == "true" ]]; then
+  tofu destroy -auto-approve
+else
+  tofu destroy
+fi
+"""
+
 # Maintenance
 [tasks.clean]
 description = "Clean up generated files"

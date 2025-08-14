@@ -5,3 +5,5 @@
 *.tfstate
 *.tfstate.*
 config/*
+kubeconfig
+talosconfig
