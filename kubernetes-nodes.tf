@@ -54,11 +54,13 @@ locals {
 # Note: Datastore validation will happen when resources are created
 # If a datastore doesn't exist, the resource creation will fail with a clear error
 
-# Download Talos image to Proxmox
-resource "proxmox_virtual_environment_download_file" "talos_image" {
+  # Download Talos image to Proxmox
+  resource "proxmox_virtual_environment_download_file" "talos_image" {
+    for_each = toset(data.proxmox_virtual_environment_nodes.cluster.names)
+
   content_type            = "iso"
   datastore_id            = local.iso_datastore
-  node_name               = data.proxmox_virtual_environment_nodes.cluster.names[0]
+  node_name               = each.key
   url                     = data.talos_image_factory_urls.kubernetes.urls.disk_image
   file_name               = "talos-nocloud-${var.talos_version}-${talos_image_factory_schematic.kubernetes.id}.img"
   decompression_algorithm = "zst"
@@ -100,7 +102,7 @@ resource "proxmox_virtual_environment_vm" "kubernetes_nodes" {
 
   disk {
     datastore_id = try(each.value.fields.inputs.datastore, local.vm_datastore)
-    file_id      = proxmox_virtual_environment_download_file.talos_image.id
+    file_id      = proxmox_virtual_environment_download_file.talos_image[try(each.value.fields.inputs.proxmox_node, data.proxmox_virtual_environment_nodes.cluster.names[0])].id
     interface    = "virtio0"
     size         = try(tonumber(each.value.fields.inputs.disk_size_gb), 20)
   }
